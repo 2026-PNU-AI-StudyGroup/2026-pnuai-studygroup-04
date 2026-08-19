@@ -1,0 +1,12 @@
+# 보안 데이터(원내 DICOM/라벨) - 절대 git에 올리지 않음
+data/
+res/
+*.h5
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# weights/*.pt 는 제외하지 않음 - Git LFS로 추적 (.gitattributes 참고)
+# 그 외 위치의 .pt(중간 산출물 등)는 계속 제외
+*.pt
+!weights/*.pt
