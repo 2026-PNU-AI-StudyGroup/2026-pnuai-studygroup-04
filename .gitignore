@@ -5,6 +5,7 @@ res/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.pytest_cache/
 
 # 모델 가중치 - 병원 데이터로 학습된 파생물이라 DUA/IRB 조건 확인 전까지 비공개
 # (weights/README.md 참고, 필요 시 별도 채널로 전달)

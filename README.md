@@ -138,12 +138,23 @@ bag(서로 다른 서브셋)에 학습시키고, 검증 시 5개 bag의 예측�
 `volume_measurement/measure_and_compare.py`는 각 환자 폴더에 대해 GT(사람 라벨) / CBAS 단독 예측 /
 CBAS+YOLO 게이팅 예측 세 가지로 각각 병변 개수·부피(mm³)를 계산해서 비교표를 만듭니다.
 
+**병변 단위 IoU 매칭(위치까지 검증)**: 개수·부피 "총량"만 비교하면 GT와 예측의 병변 개수가
+우연히 같아도 실제로는 서로 다른 위치를 가리키는 경우를 놓칠 수 있습니다(자문 검토에서 지적된
+낙관적 편향 중 하나). 이를 보완하기 위해 `volume_measurement/lesion_matching.py`가 GT/예측
+마스크를 각각 3D(슬라이스 방향까지 포함) connected-component로 병변 인스턴스화한 뒤, 병변 쌍의
+3D voxel IoU에 헝가리안 알고리즘을 적용해 1:1로 매칭합니다. IoU가 임계값(기본 0.1 — 병변이
+작고 불규칙해서 0.5 같은 기준은 비현실적) 이상인 매칭만 TP로 인정하고, 매칭 안 된 GT는 FN,
+매칭 안 된 예측은 FP로 셉니다. `measure_and_compare.py` 실행 시 CBASOnly/Gated 각각에 대해
+`*_Lesion_TP/FP/FN/Precision/Recall/F1` 컬럼과 전체 micro-averaged 요약이 함께 출력·저장됩니다.
+매칭 로직 자체의 정확성은 `tests/test_lesion_matching.py`(합성 3D 볼륨 기반, 실제 데이터 불필요)로 검증했습니다.
+
 ```bash
 python volume_measurement/measure_and_compare.py \
   --data_root ../data/results_train_cleaned \
   --cbas_weights ../weights/cbas_best.pt \
   --yolo_weights ../weights/yolo_best.pt \
-  --out_prefix result
+  --out_prefix result \
+  --lesion_iou_threshold 0.1
 ```
 
 환자 실명·등록번호 등 개인정보는 저장하지 않고, 익명 `CaseID`(`case_001`, `case_002`, ...)만 사용합니다.
@@ -161,9 +172,13 @@ pip install pytest
 pytest tests/ -v
 ```
 
-모델 forward pass의 출력 shape, 파라미터 수(29,260,629, 자문 검토 시 확인된 값과 일치), 그리고
-Focal/Dice/BCE/GUL 손실 함수가 빈 마스크·전체 마스크 등 극단적인 입력에서도 NaN/Inf 없이 안정적으로
-계산되는지 확인하는 스모크 테스트입니다.
+- `test_model_and_losses.py`: 모델 forward pass의 출력 shape, 파라미터 수(29,260,629, 자문 검토 시
+  확인된 값과 일치), Focal/Dice/BCE/GUL 손실 함수가 빈 마스크·전체 마스크 등 극단적인 입력에서도
+  NaN/Inf 없이 안정적으로 계산되는지 확인하는 스모크 테스트.
+- `test_lesion_matching.py`: 3D 병변 IoU 매칭(`lesion_matching.py`)이 완전 일치/완전 불일치/위치만
+  어긋난 개수 일치("개수는 맞지만 위치는 틀림" 케이스 포함)/임계값 미만 겹침/다중 병변 헝가리안
+  매칭/빈 GT·예측 등 경계 조건에서 TP·FP·FN·Precision·Recall을 정확히 계산하는지 검증(합성 3D
+  볼륨만 사용, 실제 데이터 불필요).
 
 ## 실행 증거
 
