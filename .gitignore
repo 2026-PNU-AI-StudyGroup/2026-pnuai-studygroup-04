@@ -6,7 +6,6 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-# weights/*.pt 는 제외하지 않음 - Git LFS로 추적 (.gitattributes 참고)
-# 그 외 위치의 .pt(중간 산출물 등)는 계속 제외
+# 모델 가중치 - 병원 데이터로 학습된 파생물이라 DUA/IRB 조건 확인 전까지 비공개
+# (weights/README.md 참고, 필요 시 별도 채널로 전달)
 *.pt
-!weights/*.pt

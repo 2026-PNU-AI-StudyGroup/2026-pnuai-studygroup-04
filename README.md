@@ -33,9 +33,7 @@ volume_measurement/
 ├── measure_and_compare.py                # GT vs CBAS-only vs CBAS+YOLO 부피/개수 비교 실행 스크립트
 └── performance_comparison_anonymized.xlsx/.csv   # 실측 비교 결과 (개인정보 제외, 익명 CaseID)
 weights/
-├── README.md      # 가중치 안내
-├── cbas_best.pt    # CBAS-UNet2D 가중치 (Git LFS)
-└── yolo_best.pt    # YOLOv11x 가중치 (Git LFS)
+└── README.md      # 가중치 비공개 안내 (DUA/IRB 확인 전까지 .pt 파일 미포함)
 tests/
 └── test_model_and_losses.py   # 모델 forward shape·파라미터 수·손실함수 NaN 방지 스모크 테스트
 LICENSE
@@ -112,14 +110,10 @@ CBAS(segmentation)와 YOLOv11x(detection)는 **서로 독립적으로 학습된 
 추론 코드에서 결합(spatial gating: YOLO box 밖의 CBAS 마스크 픽셀을 제거)합니다. 자세한 배경은
 `docs/paper`의 Method 파트(Detection-Segmentation Fusion 섹션)를 참고하세요.
 
-**가중치**: `weights/cbas_best.pt`, `weights/yolo_best.pt`가 Git LFS로 이 저장소에 포함되어 있습니다.
-클론할 때 아래처럼 LFS가 설치되어 있어야 실제 가중치 파일을 받을 수 있습니다 (LFS 없이 클론하면 포인터
-텍스트 파일만 받아집니다).
-
-```bash
-git lfs install
-git clone <repo-url>
-```
+**가중치**: `cbas_best.pt`, `yolo_best.pt`는 양산부산대학교병원 데이터로 학습된 파생물이라 DUA/IRB 조건
+확인 전까지 이 저장소에는 **포함하지 않습니다** (자세한 이유와 내부 전달 방법은 `weights/README.md` 참고).
+`train.py`로 직접 재학습하면 동일한 경로에 체크포인트가 생성되며, 아래 명령은 그 경로를 가리키는
+예시입니다.
 
 ```bash
 python inference/predict_fusion.py \
