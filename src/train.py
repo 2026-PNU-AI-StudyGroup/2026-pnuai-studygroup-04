@@ -21,8 +21,13 @@ import argparse
 import contextlib
 from copy import deepcopy
 
+import cv2
+cv2.setNumThreads(2)  # PyTorch/OpenCV 기본값(=nproc)이 num_workers=0과 겹치면 스레드 스폰 오버헤드로
+                       # CPU만 태우고 GPU는 노는 현상이 생겨서(실측 ~15배 저하) 명시적으로 제한
+
 import numpy as np
 import torch
+torch.set_num_threads(2)
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import ConcatDataset, Subset
