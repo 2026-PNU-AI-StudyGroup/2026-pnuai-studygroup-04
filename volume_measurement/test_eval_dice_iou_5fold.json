@@ -1,0 +1,121 @@
+{
+  "fold_0": {
+    "all_slices": {
+      "n_slices": 1298,
+      "Dice_mean": 0.820492684841156,
+      "Dice_std": 0.37098807096481323,
+      "IoU_mean": 0.812980592250824,
+      "IoU_std": 0.3747469484806061,
+      "Precision_mean": 0.8205070495605469,
+      "Recall_mean": 0.8251722455024719
+    },
+    "lesion_slices_only": {
+      "n_slices": 90,
+      "Dice_mean": 0.6888833045959473,
+      "Dice_std": 0.27278777956962585,
+      "IoU_mean": 0.5805427432060242,
+      "IoU_std": 0.27455204725265503,
+      "Precision_mean": 0.6890903115272522,
+      "Recall_mean": 0.7563729882240295
+    },
+    "n_test_patients": 20
+  },
+  "fold_1": {
+    "all_slices": {
+      "n_slices": 1188,
+      "Dice_mean": 0.6898146867752075,
+      "Dice_std": 0.4501650333404541,
+      "IoU_mean": 0.6810558438301086,
+      "IoU_std": 0.45146822929382324,
+      "Precision_mean": 0.6867807507514954,
+      "Recall_mean": 0.6997686624526978
+    },
+    "lesion_slices_only": {
+      "n_slices": 89,
+      "Dice_mean": 0.6685366034507751,
+      "Dice_std": 0.2626131772994995,
+      "IoU_mean": 0.5516220927238464,
+      "IoU_std": 0.258832722902298,
+      "Precision_mean": 0.6280398964881897,
+      "Recall_mean": 0.8014060258865356
+    },
+    "n_test_patients": 20
+  },
+  "fold_2": {
+    "all_slices": {
+      "n_slices": 1181,
+      "Dice_mean": 0.7246060371398926,
+      "Dice_std": 0.43751728534698486,
+      "IoU_mean": 0.7182321548461914,
+      "IoU_std": 0.43886786699295044,
+      "Precision_mean": 0.7222704887390137,
+      "Recall_mean": 0.7319279909133911
+    },
+    "lesion_slices_only": {
+      "n_slices": 65,
+      "Dice_mean": 0.6578423380851746,
+      "Dice_std": 0.27490735054016113,
+      "IoU_mean": 0.5420336723327637,
+      "IoU_std": 0.2623369097709656,
+      "Precision_mean": 0.6154079437255859,
+      "Recall_mean": 0.7908758521080017
+    },
+    "n_test_patients": 20
+  },
+  "fold_3": {
+    "all_slices": {
+      "n_slices": 1200,
+      "Dice_mean": 0.7388240694999695,
+      "Dice_std": 0.4304760694503784,
+      "IoU_mean": 0.7327053546905518,
+      "IoU_std": 0.4315870702266693,
+      "Precision_mean": 0.7383307814598083,
+      "Recall_mean": 0.7439548373222351
+    },
+    "lesion_slices_only": {
+      "n_slices": 82,
+      "Dice_mean": 0.6413270831108093,
+      "Dice_std": 0.3423369228839874,
+      "IoU_mean": 0.5517858862876892,
+      "IoU_std": 0.3257818818092346,
+      "Precision_mean": 0.6341089606285095,
+      "Recall_mean": 0.7164126038551331
+    },
+    "n_test_patients": 20
+  },
+  "fold_4": {
+    "all_slices": {
+      "n_slices": 985,
+      "Dice_mean": 0.749704897403717,
+      "Dice_std": 0.4226047694683075,
+      "IoU_mean": 0.7425097227096558,
+      "IoU_std": 0.42424389719963074,
+      "Precision_mean": 0.7487971782684326,
+      "Recall_mean": 0.7559452652931213
+    },
+    "lesion_slices_only": {
+      "n_slices": 67,
+      "Dice_mean": 0.7531246542930603,
+      "Dice_std": 0.22568771243095398,
+      "IoU_mean": 0.6473441123962402,
+      "IoU_std": 0.24855256080627441,
+      "Precision_mean": 0.7397802472114563,
+      "Recall_mean": 0.8448675870895386
+    },
+    "n_test_patients": 19
+  },
+  "summary": {
+    "all_slices": {
+      "Dice_mean_across_folds": 0.7446884751319885,
+      "Dice_std_across_folds": 0.04294245200215695,
+      "IoU_mean_across_folds": 0.7374967336654663,
+      "IoU_std_across_folds": 0.04313374159764888
+    },
+    "lesion_slices_only": {
+      "Dice_mean_across_folds": 0.6819427967071533,
+      "Dice_std_across_folds": 0.03879490124614848,
+      "IoU_mean_across_folds": 0.5746657013893127,
+      "IoU_std_across_folds": 0.03856432083355378
+    }
+  }
+}

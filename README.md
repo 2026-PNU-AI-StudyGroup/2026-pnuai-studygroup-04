@@ -12,8 +12,13 @@ src/
 ├── dicom2png.ipynb       # 라벨링 도구용 DICOM → PNG 변환 (데이터 수집/라벨링 준비)
 ├── dicom2h5.ipynb        # DICOM + 라벨 PNG → 학습용 h5 변환
 ├── train.py              # (권장) 환자 단위 5-fold 학습 스크립트 — 아래 "검증 방법론" 참고
+├── evaluate_test.py       # fold별 held-out test set 슬라이스 단위 Dice/IoU 평가
+├── evaluate_lesion_matching.py  # fold별 held-out test 환자 병변 단위 TP/FP/FN 평가
 ├── Main.ipynb            # 초기 탐색용 노트북 — 슬라이스 단위 분할이라 데이터 누수 있음(참고용, 학습엔 train.py 사용)
 ├── Evaluation.ipynb      # 학습 결과 평가
+├── logs/
+│   ├── CBAGS_grouped_5fold_train.log   # 5-fold 전체 학습 실행 로그 (실행 증거)
+│   └── README.md
 ├── networks/
 │   ├── CBAS.py            # CBAM 기반 Attention U-Net Segmentation 모델
 │   └── modules.py          # 공통 블록 (DoubleConv, SEBlock)
@@ -30,12 +35,17 @@ inference/
 volume_measurement/
 ├── functions.py                          # 병변 박스 추출, voxel 부피 계산 등 공통 함수
 ├── volume_tracking.py                    # 슬라이스 간 병변 추적 + 부피 계산 파이프라인
-├── measure_and_compare.py                # GT vs CBAS-only vs CBAS+YOLO 부피/개수 비교 실행 스크립트
-└── performance_comparison_anonymized.xlsx/.csv   # 실측 비교 결과 (개인정보 제외, 익명 CaseID)
+├── lesion_matching.py                    # 3D 병변 단위 IoU 매칭 (TP/FP/FN)
+├── measure_and_compare.py                # GT vs CBAS-only vs CBAS+YOLO 부피/개수/병변매칭 비교 스크립트
+├── RESULTS.md                            # 5-fold 재학습 최종 결과 (Dice/IoU, 병변 단위 P/R/F1)
+├── test_eval_dice_iou_5fold.json         # RESULTS.md 원본 수치 (슬라이스 단위)
+├── lesion_matching_results_5fold_heldout.csv    # RESULTS.md 원본 수치 (케이스별, 익명 CaseID)
+└── lesion_matching_summary_5fold_heldout.json   # RESULTS.md 원본 수치 (전체 집계)
 weights/
 └── README.md      # 가중치 비공개 안내 (DUA/IRB 확인 전까지 .pt 파일 미포함)
 tests/
-└── test_model_and_losses.py   # 모델 forward shape·파라미터 수·손실함수 NaN 방지 스모크 테스트
+├── test_model_and_losses.py   # 모델 forward shape·파라미터 수·손실함수 NaN 방지 스모크 테스트
+└── test_lesion_matching.py    # 3D 병변 IoU 매칭 정확성 테스트
 LICENSE
 ```
 
@@ -79,6 +89,8 @@ jupyter notebook   # dicom2h5.ipynb 실행용
    재실행하면 이전 CUDA 텐서/컨텍스트가 완전히 해제되지 않고 누적되는 경우가 있어, 장시간(수십 시간)
    학습에는 매 실행이 깨끗한 프로세스로 끝나는 `.py` 스크립트가 GPU 메모리 관리 면에서 더 안전합니다.
 3. `Evaluation.ipynb` — 학습 곡선·지표 확인
+4. `evaluate_test.py` — fold별 held-out test set 슬라이스 단위 Dice/IoU 평가 (`python evaluate_test.py --name CBAGS_grouped --gpu 0`)
+5. `evaluate_lesion_matching.py` — fold별 held-out test 환자 병변 단위 TP/FP/FN 평가 (`python evaluate_lesion_matching.py --name CBAGS_grouped --gpu 0`)
 
 ## 검증 방법론 (중요)
 
@@ -95,6 +107,10 @@ test에 동시에 들어가는 **데이터 누수**가 있었고(재검증 결�
 2. **평가셋 유병률 보존**: 기존에는 병변:정상 슬라이스를 1:1로 인위 조정(클러스터링 대표 샘플링)한
    데이터를 train/val/test 전체에 공통으로 썼습니다. `train.py`는 이 대표 샘플링을 **train 환자에게만**
    적용하고, val/test는 해당 환자들의 슬라이스를 자연 비율 그대로 사용합니다.
+
+이 방식으로 재학습한 결과와, `evaluate_test.py`/`evaluate_lesion_matching.py`로 각 fold의
+**진짜 held-out 환자**에 대해 측정한 Dice/IoU·병변 단위 Precision/Recall/F1은
+`volume_measurement/RESULTS.md`에 정리했습니다.
 
 ## 모델 개요 (CBAS)
 
@@ -159,11 +175,26 @@ python volume_measurement/measure_and_compare.py \
 
 환자 실명·등록번호 등 개인정보는 저장하지 않고, 익명 `CaseID`(`case_001`, `case_002`, ...)만 사용합니다.
 
-> ⚠️ **`performance_comparison_anonymized.xlsx`의 수치는 위 "검증 방법론"에서 설명한 구버전
-> (환자 단위 미분리 + 평가셋 유병률 인위조정) 파이프라인으로 산출된 것으로, **신뢰할 수 있는 성능
-> 근거가 아닙니다.** `train.py`(환자 단위 GroupKFold + 자연 유병률 평가)로 재학습을 진행 중이며,
-> 완료되는 대로 이 표와 파일을 교체할 예정입니다. 게이팅으로 개수/부피 과다예측이 줄어드는
-> **방향성** 자체는 재현되었지만, 정확한 수치(%, MAE 등)는 재학습 결과로 다시 봐야 합니다.
+**`evaluate_lesion_matching.py`**는 위와 별개로, 5-fold 전체를 cross-validation 방식으로
+pooled 평가합니다(각 환자를 그 환자가 held-out이었던 fold의 가중치로만 평가 — 즉 전체
+99명 전원이 학습에 한 번도 안 쓰인 모델로 진짜 held-out 평가됨). 이 결과가 아래 "재학습 최종
+결과"의 병변 단위 수치입니다.
+
+```bash
+python evaluate_lesion_matching.py --name CBAGS_grouped --gpu 0
+```
+
+## 재학습 최종 결과
+
+`train.py`(환자 단위 GroupKFold + 자연 유병률 평가)로 5-fold 재학습을 완료했습니다. 슬라이스
+단위 Dice/IoU, 병변 단위 Precision/Recall/F1(CBAS 단독 vs CBAS+YOLO 게이팅) 전체 수치와 해석은
+**[`volume_measurement/RESULTS.md`](volume_measurement/RESULTS.md)** 참고. 이전 버전
+(환자 단위 미분리 + 평가셋 유병률 인위조정) 결과였던 `performance_comparison_anonymized.xlsx/.csv`는
+삭제하고 이 결과로 완전히 교체했습니다.
+
+요약: 게이팅 적용 시 병변 단위 FP가 644→62건(90% 감소)로 줄면서 Precision 0.39→0.86,
+F1 0.52→0.80으로 개선되어, "YOLO 게이팅이 과다예측을 줄인다"는 가설이 데이터 누수 없는
+진짜 held-out 평가로 확인되었습니다.
 
 ## 테스트
 
@@ -186,5 +217,6 @@ pytest tests/ -v
 다만 원내 데이터를 대상으로 하는 셀은 출력에 실제 환자 폴더명·파일 경로가 그대로 찍히기 때문에
 **개인정보 유출 방지를 위해 그 셀들만 출력을 비워뒀고**, 대신 각 노트북 맨 아래 "실행 검증용
 데모(합성 익명 데이터)" 셀에서 무작위 합성 DICOM으로 동일한 함수(`get_h5` 등)를 실행한 결과를
-확인할 수 있습니다. `train.py`의 실행 증거(전체 학습 로그)는 현재 진행 중인 재학습이 끝나는 대로
-추가할 예정입니다.
+확인할 수 있습니다. `train.py`의 실행 증거는 `src/logs/CBAGS_grouped_5fold_train.log`(5-fold
+전체, 2026-08-19~08-20 실제 학습 타임스탬프 포함, 개인정보 없음)로 남겼습니다 —
+자세한 내용은 `src/logs/README.md` 참고.

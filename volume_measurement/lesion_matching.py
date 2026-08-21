@@ -11,6 +11,7 @@
 예측은 FP로 센다.
 """
 import os
+import cv2
 import numpy as np
 from scipy import ndimage
 from scipy.optimize import linear_sum_assignment
@@ -21,10 +22,15 @@ from functions import imread_unicode
 _STRUCT_26 = np.ones((3, 3, 3), dtype=np.uint8)
 
 
-def load_mask_volume_sorted(mask_dir, filenames=None):
+def load_mask_volume_sorted(mask_dir, filenames=None, target_shape=(192, 192)):
     """mask_dir의 png들을 (전달받았으면 그 순서로, 아니면 파일명 정렬 순서로) 쌓아
     (Z, H, W) 이진(0/1) 볼륨으로 반환. GT/예측 두 볼륨을 같은 z 순서로 쌓기 위해
-    반드시 같은 filenames 리스트를 넘겨서 호출해야 한다."""
+    반드시 같은 filenames 리스트를 넘겨서 호출해야 한다.
+
+    GT labelmask PNG는 원본 DICOM 해상도 그대로인 반면 모델 예측은 항상 192x192로
+    리사이즈돼서 나오므로, 둘을 같은 픽셀 좌표계에서 비교하려면 여기서 모두
+    target_shape으로 맞춰야 한다(안 맞추면 voxel IoU 계산 시 shape 불일치로 깨짐).
+    이진 마스크라 보간은 nearest-neighbor를 쓴다."""
     if filenames is None:
         filenames = sorted(f for f in os.listdir(mask_dir) if f.lower().endswith('.png'))
 
@@ -33,14 +39,19 @@ def load_mask_volume_sorted(mask_dir, filenames=None):
         path = os.path.join(mask_dir, fname)
         if os.path.exists(path):
             mask = imread_unicode(path)
-            slices.append((mask > 0).astype(np.uint8) if mask is not None else None)
+            if mask is not None:
+                binm = (mask > 0).astype(np.uint8)
+                if binm.shape != target_shape:
+                    binm = cv2.resize(binm, (target_shape[1], target_shape[0]), interpolation=cv2.INTER_NEAREST)
+                slices.append(binm)
+            else:
+                slices.append(None)
         else:
             slices.append(None)
 
-    shape = next((s.shape for s in slices if s is not None), None)
-    if shape is None:
-        return np.zeros((0, 0, 0), dtype=np.uint8)
-    slices = [s if s is not None else np.zeros(shape, dtype=np.uint8) for s in slices]
+    if not any(s is not None for s in slices):
+        return np.zeros((0,) + target_shape, dtype=np.uint8)
+    slices = [s if s is not None else np.zeros(target_shape, dtype=np.uint8) for s in slices]
     return np.stack(slices, axis=0)
 
 

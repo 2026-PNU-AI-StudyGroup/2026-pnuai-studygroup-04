@@ -3,12 +3,15 @@
 """
 import os
 import sys
+import shutil
+import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'volume_measurement'))
 
+import cv2
 import numpy as np
 
-from lesion_matching import match_lesions_iou, label_3d_lesions
+from lesion_matching import match_lesions_iou, label_3d_lesions, match_lesions_from_dirs
 
 
 def _empty_volume(shape=(4, 32, 32)):
@@ -109,6 +112,36 @@ def test_empty_gt_with_prediction_is_pure_false_positive():
     assert result['fp'] == 1 and result['tp'] == 0 and result['fn'] == 0
     assert result['precision'] == 0.0
     assert result['recall'] == 1.0  # GT 병변이 없으므로 recall은 정의상 1.0
+
+
+def test_match_lesions_from_dirs_handles_mismatched_native_resolution():
+    """GT labelmask PNG는 원본 DICOM 해상도(예: 190x190)이고 모델 예측은 항상 192x192로
+    나오는 실제 상황을 재현. 리사이즈로 좌표계를 맞추지 않으면 voxel IoU 계산에서
+    shape mismatch로 죽는다(실제 평가 중 이 버그로 크래시했었음) - 회귀 테스트."""
+    tmp = tempfile.mkdtemp(prefix='lesion_matching_test_')
+    try:
+        gt_dir = os.path.join(tmp, 'gt')
+        pred_dir = os.path.join(tmp, 'pred')
+        os.makedirs(gt_dir)
+        os.makedirs(pred_dir)
+
+        filenames = [f'{i}.png' for i in range(3)]
+        for i, fname in enumerate(filenames):
+            gt_mask = np.zeros((190, 190), dtype=np.uint8)
+            pred_mask = np.zeros((192, 192), dtype=np.uint8)
+            if i == 1:
+                # 같은 상대적 위치(중앙 근처)에 병변 - 해상도가 달라도 리사이즈 후 잘 겹쳐야 함
+                gt_mask[80:110, 80:110] = 255
+                pred_mask[81:111, 81:111] = 255
+            cv2.imwrite(os.path.join(gt_dir, fname), gt_mask)
+            cv2.imwrite(os.path.join(pred_dir, fname), pred_mask)
+
+        result = match_lesions_from_dirs(gt_dir, pred_dir, iou_threshold=0.1, filenames=filenames)
+
+        assert result['n_gt'] == 1 and result['n_pred'] == 1
+        assert result['tp'] == 1 and result['fp'] == 0 and result['fn'] == 0
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_min_voxels_filters_tiny_noise_components():
