@@ -1,17 +1,19 @@
 """시연 영상 녹화용 로컬 데모 웹페이지 (Gradio).
 
-CBAS(Segmentation) 단독 vs CBAS+YOLOv11x(게이팅) 결과를 슬라이스 단위로 나란히 보여준다 —
-이 프로젝트의 핵심 결과(게이팅이 위양성을 90% 가까이 줄인다)를 시각적으로 바로 보여주기 위한
-용도. 환자 선택 드롭다운은 실명이 아닌 익명 Case ID만 노출한다(화면 녹화 시 개인정보가 찍히지
-않도록 하기 위함 — 절대로 실제 폴더명/환자명을 UI에 표시하지 않는다).
+이전 버전은 원내 환자 데이터 폴더를 드롭다운으로 나열해서 보여줬는데, 화면 녹화(→ 유튜브 등으로
+제출)에 실제 환자 MRI 영상이 찍히는 것 자체가 바람직하지 않다는 판단으로 방식을 바꿨다. 이 버전은
+환자 데이터를 전혀 스캔하지 않고, **사용자가 직접 업로드/드래그한 이미지 한 장**만 추론한다 —
+즉 화면에 뭐가 나올지는 100% 업로드하는 사람이 고른 이미지에 달려있다.
+
+시연용 이미지 추천: 원내 데이터 대신 공개 데이터셋(ISLES 2022, README의 "데이터" 섹션 참고)에서
+DWI 슬라이스를 하나씩 받아 병변 있는 것/없는 것 각 1장을 준비해서 사용하는 걸 권장한다. 정 원내
+이미지를 쓰고 싶다면 그건 팀의 판단이지만, 화면 녹화물이 외부로 공개될 수 있다는 점을 고려해서
+신중히 고르는 걸 권장한다.
 
 실행:
   pip install gradio
   python demo_app.py --gpu 0
-  (브라우저가 자동으로 열리지 않으면 콘솔에 출력된 http://127.0.0.1:7860 접속)
-
-가중치(cbas_best.pt, yolo_best.pt)와 원내 데이터는 로컬에만 있고 저장소에는 포함되지 않는다.
-이 앱은 순수 로컬 실행용이며, 어디에도 배포/공개하지 않는다는 전제로 만들어졌다.
+  (콘솔에 뜨는 http://127.0.0.1:7860 접속)
 """
 import os
 import sys
@@ -31,67 +33,38 @@ sys.path.insert(0, _here)
 sys.path.insert(0, os.path.join(_here, '..', 'inference'))
 sys.path.insert(0, os.path.join(_here, '..', 'docs', 'repo_bundle', 'inference'))
 
-from predict_fusion import load_cbas, get_bvalue, resize_2d, gate_mask, TF, CBAS_THRESHOLD, YOLO_CONF
+from predict_fusion import load_cbas, resize_2d, gate_mask, TF, CBAS_THRESHOLD, YOLO_CONF
 
 try:
     from ultralytics import YOLO
 except ImportError:
     raise SystemExit('ultralytics가 설치되어 있지 않습니다: pip install ultralytics')
 
-
-def resolve_case_dir(patient_dir, case):
-    for name in (case, case + 'op'):
-        p = os.path.join(patient_dir, name)
-        if os.path.isdir(p):
-            return p, name
-    return None, None
+DICOM_EXTS = ('.dcm', '.dicom', '.ima')
 
 
-def get_b1000_files(phase_dir):
-    files = sorted(f for f in os.listdir(phase_dir) if f.endswith('.dcm'))
-    keep = []
-    for f in files:
-        ds = pydicom.dcmread(os.path.join(phase_dir, f), stop_before_pixels=True)
-        if get_bvalue(ds) == 1000:
-            keep.append(f)
-    return keep
+def load_as_grayscale_array(file_path):
+    """업로드된 파일을 (H,W) float32 grayscale numpy 배열로 변환. DICOM과 일반 이미지(png/jpg 등) 둘 다 지원."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in DICOM_EXTS:
+        ds = pydicom.dcmread(file_path)
+        return ds.pixel_array.astype(np.float32)
 
+    try:
+        ds = pydicom.dcmread(file_path, force=True)
+        if hasattr(ds, 'pixel_array'):
+            return ds.pixel_array.astype(np.float32)
+    except Exception:
+        pass
 
-def build_case_index(data_root):
-    """환자 폴더를 스캔해 익명 Case ID -> (patient_dir, phase_dir, phase_name) 매핑을 만든다.
-    UI에는 실제 환자 폴더명이 절대 노출되지 않고 case_001 같은 익명 ID만 보인다."""
-    index = {}
-    labels = []
-    counter = 0
-    if not os.path.isdir(data_root):
-        return index, labels
-    for group in sorted(os.listdir(data_root)):
-        group_path = os.path.join(data_root, group)
-        if not os.path.isdir(group_path):
-            continue
-        for patient in sorted(os.listdir(group_path)):
-            patient_dir = os.path.join(group_path, patient)
-            if not os.path.isdir(patient_dir):
-                continue
-            for case in ('post', 'pre'):
-                case_dir, phase_name = resolve_case_dir(patient_dir, case)
-                if case_dir is None or not any(f.endswith('.dcm') for f in os.listdir(case_dir)):
-                    continue
-                b1000 = get_b1000_files(case_dir)
-                if not b1000:
-                    continue
-                counter += 1
-                case_id = f'case_{counter:03d} ({phase_name}, {len(b1000)}장)'
-                gt_dir = os.path.join(patient_dir, 'labelmask', phase_name.replace('op', ''))
-                index[case_id] = {
-                    'phase_dir': case_dir, 'gt_dir': gt_dir, 'files': b1000,
-                }
-                labels.append(case_id)
-    return index, labels
+    data = np.fromfile(file_path, dtype=np.uint8)
+    img = cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise ValueError('이미지를 읽을 수 없습니다 (DICOM 또는 PNG/JPG 등 일반 이미지 파일이어야 합니다).')
+    return img.astype(np.float32)
 
 
 def overlay_mask(gray_u8, mask_binary, color_bgr, alpha=0.45):
-    """흑백 슬라이스 위에 이진 마스크를 반투명 색으로 얹는다."""
     rgb = np.stack([gray_u8] * 3, axis=-1).astype(np.float32)
     color = np.array(color_bgr, dtype=np.float32)
     m = (mask_binary > 0)
@@ -106,124 +79,82 @@ class Demo:
         print(f'YOLO 가중치 로드: {yolo_weights}')
         self.yolo_model = YOLO(yolo_weights)
         self.device = device
-        self._cache = {}  # case_id -> list of per-slice result dicts
 
-    def _run_case(self, case_id, case_info):
-        results = []
-        for f in case_info['files']:
-            dcm_path = os.path.join(case_info['phase_dir'], f)
-            ds = pydicom.dcmread(dcm_path)
-            arr = ds.pixel_array.astype(np.float32)
-            resized = resize_2d(arr)
+    def run(self, file):
+        if file is None:
+            return None, None, None, '이미지를 업로드하세요.'
 
-            disp = (resized - resized.min()) / (resized.max() - resized.min() + 1e-8)
-            img_u8 = (disp * 255).astype(np.uint8)
-            img_rgb = np.stack([img_u8] * 3, axis=-1)
+        file_path = file if isinstance(file, str) else file.name
+        arr = load_as_grayscale_array(file_path)
+        resized = resize_2d(arr)
 
-            x = TF(torch.from_numpy(resized.astype(np.float32)))
-            x = x.unsqueeze(0).unsqueeze(0).to(self.device)
-            with torch.no_grad():
-                p_main, _, _ = self.cbas_model(x)
-                prob = torch.sigmoid(p_main)[0, 0].cpu().numpy()
-            cbas_binary = (prob > CBAS_THRESHOLD).astype(np.uint8)
+        disp = (resized - resized.min()) / (resized.max() - resized.min() + 1e-8)
+        img_u8 = (disp * 255).astype(np.uint8)
+        img_rgb = np.stack([img_u8] * 3, axis=-1)
 
-            yolo_res = self.yolo_model.predict(img_rgb, verbose=False, conf=YOLO_CONF)
-            boxes = yolo_res[0].boxes.xyxy.cpu().numpy() if len(yolo_res[0].boxes) else np.zeros((0, 4))
-            gated = gate_mask(cbas_binary, boxes)
+        x = TF(torch.from_numpy(resized.astype(np.float32)))
+        x = x.unsqueeze(0).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            p_main, _, _ = self.cbas_model(x)
+            prob = torch.sigmoid(p_main)[0, 0].cpu().numpy()
+        cbas_binary = (prob > CBAS_THRESHOLD).astype(np.uint8)
 
-            gt_path = os.path.join(case_info['gt_dir'], os.path.splitext(f)[0] + '.png')
-            gt_mask = None
-            if os.path.exists(gt_path):
-                raw = cv2.imdecode(np.fromfile(gt_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
-                if raw is not None:
-                    gt_mask = cv2.resize((raw > 0).astype(np.uint8), (192, 192), interpolation=cv2.INTER_NEAREST)
+        yolo_res = self.yolo_model.predict(img_rgb, verbose=False, conf=YOLO_CONF)
+        boxes = yolo_res[0].boxes.xyxy.cpu().numpy() if len(yolo_res[0].boxes) else np.zeros((0, 4))
+        gated = gate_mask(cbas_binary, boxes)
 
-            results.append({
-                'img_u8': img_u8, 'cbas_mask': cbas_binary, 'gated_mask': gated,
-                'gt_mask': gt_mask, 'n_boxes': len(boxes),
-            })
-        return results
+        original = np.stack([img_u8] * 3, axis=-1)
+        cbas_view = overlay_mask(img_u8, cbas_binary, (0, 0, 255))     # 빨강: CBAS 단독
+        gated_view = overlay_mask(img_u8, gated, (0, 200, 0))          # 초록: 게이팅 후
 
-    def load_case(self, case_id, case_index):
-        if case_id not in self._cache:
-            self._cache[case_id] = self._run_case(case_id, case_index[case_id])
-        n = len(self._cache[case_id])
-        slider_update = gr.update(minimum=0, maximum=max(1, n - 1), value=0, step=1)
-        original, cbas_view, gated_view, gt_view, summary = self.render_slice(case_id, 0)
-        return slider_update, original, cbas_view, gated_view, gt_view, summary
+        cbas_px = int(cbas_binary.sum())
+        gated_px = int(gated.sum())
+        if gated_px > 0:
+            verdict = f'🔴 **병변 의심 영역 검출됨** (게이팅 후 {gated_px}px, YOLO 박스 {len(boxes)}개)'
+        elif cbas_px > 0:
+            verdict = (f'🟢 **병변 미검출로 판단** (CBAS는 {cbas_px}px를 의심했지만 YOLO가 뒷받침하지 '
+                       f'않아 게이팅으로 제거됨)')
+        else:
+            verdict = '🟢 **병변 미검출**'
 
-    def render_slice(self, case_id, slice_idx):
-        if case_id not in self._cache:
-            return None, None, None, None, ''
-        slice_idx = int(slice_idx)
-        r = self._cache[case_id][slice_idx]
-        original = np.stack([r['img_u8']] * 3, axis=-1)
-        cbas_view = overlay_mask(r['img_u8'], r['cbas_mask'], (0, 0, 255))       # 빨강: CBAS 단독
-        gated_view = overlay_mask(r['img_u8'], r['gated_mask'], (0, 200, 0))     # 초록: 게이팅 후
-        gt_view = (overlay_mask(r['img_u8'], r['gt_mask'], (255, 200, 0))
-                   if r['gt_mask'] is not None else original)
-
-        cbas_px = int(r['cbas_mask'].sum())
-        gated_px = int(r['gated_mask'].sum())
-        removed = cbas_px - gated_px
-        pct = (removed / cbas_px * 100) if cbas_px > 0 else 0.0
-        summary = (
-            f'슬라이스 {slice_idx + 1}/{len(self._cache[case_id])}  |  '
-            f'YOLO 검출 박스 {r["n_boxes"]}개  |  '
-            f'CBAS 단독 병변 픽셀 {cbas_px}  →  게이팅 후 {gated_px}  '
-            f'(제거 {removed}px, {pct:.1f}%)'
-        )
-        return original, cbas_view, gated_view, gt_view, summary
+        return original, cbas_view, gated_view, verdict
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_root', default=os.path.join(_here, '..', 'data', 'results_train_cleaned'))
     parser.add_argument('--cbas_weights', default=os.path.join(_here, '..', 'weights', 'cbas_best.pt'))
     parser.add_argument('--yolo_weights', default=os.path.join(_here, '..', 'weights', 'yolo_best.pt'))
     parser.add_argument('--gpu', default='0')
-    parser.add_argument('--share', action='store_true', help='gradio 공개 링크 생성(팀 외부 공유 시에만 사용)')
+    parser.add_argument('--share', action='store_true',
+                         help='gradio 공개 링크 생성 - 업로드하는 이미지가 외부 서버를 거치니 신중히 사용')
     args = parser.parse_args()
 
     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    case_index, case_labels = build_case_index(args.data_root)
-    if not case_labels:
-        raise SystemExit(f'{args.data_root} 아래에서 사용 가능한 케이스를 찾지 못했습니다.')
-
     demo_runner = Demo(args.cbas_weights, args.yolo_weights, device)
 
     with gr.Blocks(title='CBAS + YOLOv11x 병변 탐지 데모') as app:
         gr.Markdown(
             '# 뇌 MRI 병변 Detection-Segmentation Fusion 데모\n'
-            'CBAS-UNet2D 단독 분할(빨강) vs YOLOv11x 게이팅 적용 후(초록)을 슬라이스 단위로 비교합니다. '
-            '환자 식별 정보는 표시하지 않고 익명 Case ID만 사용합니다.'
+            'DWI MRI 슬라이스 이미지(DICOM 또는 PNG/JPG)를 업로드하면, CBAS-UNet2D 단독 분할(빨강)과 '
+            'YOLOv11x 게이팅 적용 후(초록) 결과를 비교해서 보여줍니다.\n\n'
+            '**이 페이지는 업로드한 이미지 외 어떤 환자 데이터도 불러오지 않습니다** — 시연 영상에는 '
+            '직접 선택한 이미지만 나옵니다. 원내 데이터 대신 공개 데이터셋(ISLES 2022)의 예시 슬라이스 '
+            '사용을 권장합니다.'
         )
         with gr.Row():
-            case_dropdown = gr.Dropdown(choices=case_labels, label='Case 선택 (익명)', value=case_labels[0])
-            load_btn = gr.Button('케이스 로드 & 추론 실행', variant='primary')
-        slice_slider = gr.Slider(minimum=0, maximum=1, step=1, value=0, label='슬라이스')
-        summary_text = gr.Markdown()
+            file_input = gr.File(label='DICOM 또는 이미지 업로드', file_count='single')
+            run_btn = gr.Button('추론 실행', variant='primary')
+        verdict_text = gr.Markdown()
         with gr.Row():
             img_original = gr.Image(label='원본', type='numpy')
             img_cbas = gr.Image(label='CBAS 단독 (빨강)', type='numpy')
             img_gated = gr.Image(label='CBAS + YOLO 게이팅 (초록)', type='numpy')
-            img_gt = gr.Image(label='GT 라벨 (있는 경우, 주황)', type='numpy')
 
-        case_index_state = gr.State(case_index)
-
-        load_btn.click(
-            fn=demo_runner.load_case,
-            inputs=[case_dropdown, case_index_state],
-            outputs=[slice_slider, img_original, img_cbas, img_gated, img_gt, summary_text],
-        )
-        slice_slider.change(
-            fn=demo_runner.render_slice,
-            inputs=[case_dropdown, slice_slider],
-            outputs=[img_original, img_cbas, img_gated, img_gt, summary_text],
-        )
+        run_btn.click(fn=demo_runner.run, inputs=[file_input], outputs=[img_original, img_cbas, img_gated, verdict_text])
+        file_input.change(fn=demo_runner.run, inputs=[file_input], outputs=[img_original, img_cbas, img_gated, verdict_text])
 
     app.launch(share=args.share)
 
