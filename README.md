@@ -30,6 +30,7 @@ src/
     └── hyper_parameters.py     # 하이퍼파라미터 및 경로(HP)
 inference/
 ├── predict_fusion.py       # CBAS(segmentation) + YOLOv11x(detection) 결합 추론
+├── demo_app.py              # 시연 영상 녹화용 로컬 데모 웹페이지 (Gradio)
 ├── Yolo_train_bagging.py   # YOLOv12n bagging(bootstrap 앙상블, 8-bag) 학습 스크립트
 └── Yolo_val_bagging.py     # bag별 예측을 WBF(Weighted Boxes Fusion)로 합쳐 평가하는 스크립트
 volume_measurement/
@@ -140,6 +141,22 @@ python inference/predict_fusion.py \
 ```
 
 폴더 안 b=1000 DWI 슬라이스만 자동 선별하여, 최종 게이팅된 병변 마스크를 `out_dir`에 PNG로 저장합니다.
+
+### 데모 웹페이지 (시연 영상 녹화용)
+
+`inference/demo_app.py`는 CBAS 단독 예측(빨강)과 CBAS+YOLO 게이팅 후 예측(초록)을 슬라이스 단위로
+나란히 보여주는 로컬 Gradio 앱입니다. 게이팅이 위양성을 줄이는 과정을 실제 데이터로 눈으로 바로
+확인할 수 있어 시연 영상 녹화용으로 만들었습니다.
+
+```bash
+pip install gradio
+python inference/demo_app.py --gpu 0
+# 콘솔에 뜨는 http://127.0.0.1:7860 접속
+```
+
+**개인정보 보호**: 환자 선택 드롭다운에는 실제 폴더명(환자명 포함)이 아니라 `case_001`처럼 익명
+Case ID만 표시됩니다 — 화면 녹화 중 실수로 개인정보가 찍히는 일이 없도록 하기 위한 설계입니다.
+가중치·원내 데이터는 로컬에만 있고, 이 앱은 배포용이 아니라 순수 로컬 실행/녹화용입니다.
 
 ### YOLO Bagging 학습/평가 (참고용)
 

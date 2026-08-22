@@ -83,3 +83,4 @@ PyYAML==6.0.3
 openpyxl==3.1.5
 ensemble-boxes==1.0.9
 pytest==9.1.1
+gradio==6.25.0  # demo_app.py (시연 영상 녹화용 로컬 데모) 전용, 핵심 파이프라인에는 불필요
