@@ -7,9 +7,7 @@ PNU AI학습공동체 "노예(진)" 팀 프로젝트의 **데이터 수집/전�
 
 `inference/demo_app.py` 데모 웹페이지 녹화본입니다.
 
-<video src="https://raw.githubusercontent.com/2026-PNU-AI-StudyGroup/2026-pnuai-studygroup-04/main/%EC%8B%9C%EC%97%B0%EC%98%81%EC%83%81.mp4" controls width="600"></video>
-
-(GitHub에서 위 영상이 바로 재생되지 않으면 [여기](https://github.com/2026-PNU-AI-StudyGroup/2026-pnuai-studygroup-04/raw/main/%EC%8B%9C%EC%97%B0%EC%98%81%EC%83%81.mp4)를 클릭해서 다운로드/재생하세요.)
+https://github.com/user-attachments/assets/9c441d81-edd1-4f9f-ac9a-bcb064dcfe1a
 
 ## 구성
 
