@@ -1,7 +1,15 @@
 # 뇌 MRI 병변 Segmentation — 데이터 파이프라인 & 모델 (CBAS)
 
 PNU AI학습공동체 "노예(진)" 팀 프로젝트의 **데이터 수집/전처리 · 라벨링 준비 · h5 변환 · Segmentation 모델 개발** 파트입니다.
-전체 프로젝트 소개는 저장소 루트의 중간보고서를 참고하세요.
+전체 프로젝트 소개는 저장소 루트의 중간보고서/최종보고서를 참고하세요.
+
+## 시연 영상
+
+`inference/demo_app.py` 데모 웹페이지 녹화본입니다.
+
+<video src="https://raw.githubusercontent.com/2026-PNU-AI-StudyGroup/2026-pnuai-studygroup-04/main/%EC%8B%9C%EC%97%B0%EC%98%81%EC%83%81.mp4" controls width="600"></video>
+
+(GitHub에서 위 영상이 바로 재생되지 않으면 [여기](https://github.com/2026-PNU-AI-StudyGroup/2026-pnuai-studygroup-04/raw/main/%EC%8B%9C%EC%97%B0%EC%98%81%EC%83%81.mp4)를 클릭해서 다운로드/재생하세요.)
 
 ## 구성
 
